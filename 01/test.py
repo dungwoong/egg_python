@@ -369,6 +369,7 @@ if __name__ == '__main__':
 # 2. you might not actually have some form of nodes in node2id, so we added
 # if node in self.node2id: self.node2id.pop(node) to process_unions. not sure when this would happen...
 # 3. extraction process is...interesting, because you might have e.g. x * 0 = 0, x*0 and 0 are in the same class so you are recursing on yourself
+# 4. currently for extraction, we move into a different format, so we actually have a tree. Then, we do the scoring with a local cost function, then the extracted output is a different node format. Pretty weird.
 
 # next steps:
 # - change the format of the graph, this is kinda dumb
