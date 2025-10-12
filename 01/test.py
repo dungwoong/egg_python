@@ -28,17 +28,17 @@ class EClass:
     Represents an e-class, containing a set of nodes
     """
     id: int
-    # nodes: set
+    nodes: set
     data: any
     # HERE: list of eclass ids of the parent enodes
     # Rust: original ids of parent enodes. not sure what the use is
     parents: set
 
-    def __init__(self, cid, data=None, parents=None):
+    def __init__(self, cid, data=None, nodes=None, parents=None):
         self.id = cid
 
         # we literally don't need this for tracking nodes
-        # self.nodes = set() if nodes is None else set(nodes)
+        self.nodes = set() if nodes is None else set(nodes)
         self.data = data
 
         # we can see that since enode.children was eclass ids, parents is tracked in here
@@ -87,8 +87,9 @@ class EGraph:
         enode = self.canonicalize(enode)
         return self.node2id[enode]
 
-    def new_singleton_eclass(self):
+    def new_singleton_eclass(self, node: Node):
         eclass = EClass(self.curr_eclass_id)
+        eclass.nodes.add(node)
         self.id2eclass[eclass.id] = eclass
         self.curr_eclass_id += 1
         return eclass.id
@@ -97,7 +98,7 @@ class EGraph:
         enode = self.canonicalize(enode)
         if enode in self.node2id: # hashcons(?)
             return self.node2id[enode]
-        eclass_id = self.new_singleton_eclass()
+        eclass_id = self.new_singleton_eclass(enode)
         for child_eclass_id in enode.children:
             self.id2eclass[child_eclass_id].parents.add(eclass_id)
         self.unionfind.add(eclass_id)
@@ -105,6 +106,7 @@ class EGraph:
     
     def merge(self, eid1: int, eid2: int):
         """Merges two eclass ids"""
+        # print(f'merging {eid1}, {eid2}')
         # perform_union egraph.rs 1144
         # we can see that at 1177, we actually remove class2 and add class2 nodes to class1
         eid1, eid2 = (eid1, eid2) if len(self.id2eclass[eid1].parents) >= len(self.id2eclass[eid2].parents) else (eid2, eid1)
@@ -112,6 +114,17 @@ class EGraph:
         new_id = self.find(eid1)
         if not merged: # xy already merged
             return new_id
+
+        # maybe just canonicalize eid2 here?
+        for n in self.id2eclass[eid2].nodes:
+            # nothing should change with the nodes, so let's just update their hashcons entry
+            self.node2id[self.canonicalize(n)] = new_id
+        
+        # NOTE in the egg source code, they self.classes.remove id2 and then they do concat_vecs on the nodes and parents
+        # SO WHAT TF IS THE POINT OF THE UNION FIND THEN???
+        self.id2eclass[new_id].nodes = self.id2eclass[new_id].nodes.union(self.id2eclass[eid2].nodes)
+        self.id2eclass[new_id].parents = self.id2eclass[new_id].parents.union(self.id2eclass[eid2].parents)
+
         
         # add class2 to new_id and delete
         # if class1 is not new_id, add class1 to new_id and delete too
@@ -120,6 +133,8 @@ class EGraph:
         # So in the paper, they say they extend with the class and look at parents.
         # here, they extend with parents and look at children I think
         self.pending.extend(self.id2eclass[eid2].parents)
+        # since we merged, we also have to add eid1's parents
+        self.pending.extend(self.id2eclass[eid1].parents)
         return new_id
     
     def process_unions(self):
@@ -127,18 +142,22 @@ class EGraph:
         while len(self.pending):
             eclass_id = self.pending.pop()
             eclass: EClass = self.id2eclass[eclass_id]
-            for i in range(len(eclass.nodes)):
-                node = eclass.nodes[i]
+            nodes = list(eclass.nodes)
+            # print(f'repairing {eclass_id} {nodes}')
+            for node in nodes:
                 new_node = self.canonicalize(node)
+                # print(f'{node} -> {new_node}')
 
                 already_in_memo = not new_node.matches(node) and new_node in self.node2id
                 
                 # updates
                 if already_in_memo:
                     self.merge(eclass_id, self.node2id[new_node])
-                self.node2id.pop(node)
+                if node in self.node2id:
+                    self.node2id.pop(node)
                 self.node2id[new_node] = self.find(eclass_id)
-                eclass.nodes[i] = new_node
+                eclass.nodes.remove(node)
+                eclass.nodes.add(new_node)
 
 
 # pattern matcher
@@ -146,25 +165,6 @@ class EGraph:
 
 
 # Extraction, I'm going to put the e-graph into a different format
-class ExEClass:
-    id: int
-    nodes: List[Node]
-    metadata: dict
-    
-    def __init__(self, cid, nodes):
-        self.id = cid
-        self.nodes = nodes
-        self.metadata = dict()
-    
-    def add_node(self, n):
-        self.nodes.append(n)
-    
-    def __repr__(self):
-        return f'xClass({self.id})'
-    
-    def full_repr(self):
-        return f'xClass(id={self.id}, nodes={[repr(n) for n in self.nodes]})'
-
 class ExENode:
     op: str
     children: list # initially a list of int, and then we replace them all with e-classes
@@ -175,7 +175,51 @@ class ExENode:
     
     def __repr__(self):
         assert all(isinstance(c, ExEClass) for c in self.children)
-        return f'xNode({self.op}, {tuple(c.id for c in self.children)})'
+        return f'xNode({self.op}, {tuple(c.id for c in self.children)})' if self.children else f'xNode({self.op})'
+
+class ExtractedEnode:
+    """
+    After extraction process
+    """
+    op: str
+    children: list
+    def __init__(self, op, children=None):
+        self.op = op
+        self.children = children if children is not None else []
+    
+    @staticmethod
+    def from_enode(enode: ExENode):
+        return ExtractedEnode(enode.op)
+    
+    def __repr__(self):
+        args = ' '.join([str(c) for c in self.children]) if self.children else ''
+        return f'({self.op} {args})' if self.children else str(self.op)
+
+
+class ExEClass:
+    id: int
+    nodes: List[ExENode]
+    metadata: dict
+    
+    def __init__(self, cid, nodes):
+        self.id = cid
+        self.nodes = nodes
+        self.metadata = dict()
+    
+    def add_node(self, n):
+        self.nodes.append(n)
+    
+    def get_children(self):
+        children = set()
+        for n in self.nodes:
+            children = children.union(n.children)
+        return children
+    
+    def __repr__(self):
+        return f'xClass({self.id})'
+    
+    def full_repr(self):
+        return f'xClass(id={self.id}, nodes={[repr(n) for n in self.nodes]})'
 
 def export_egraph(egraph: EGraph):
     eclasses = dict() # id to eclass
@@ -195,6 +239,62 @@ def export_egraph(egraph: EGraph):
         n.children = tuple(eclasses[egraph.unionfind[c]] for c in n.children)
     return eclasses, x_enodes
 
+# def topology_sort(classes: List[ExEClass], parents_first=True):
+#     stack = list(classes)
+#     output_list = []
+#     started = dict()
+#     finished = dict()
+#     time = 0
+#     while len(stack):
+#         time += 1
+#         curr = stack.pop()
+#         if curr in finished:
+#             continue
+#         if curr in started:
+#             finished[curr] = time
+#             continue
+#         output_list.append(curr)
+#         started[curr] = time
+#         stack.append(curr)
+#         children = curr.get_children()
+#         for child in children:
+#             stack.append(child)
+#     output_list = list(sorted(output_list, key=lambda n: finished[n], reverse=parents_first))
+#     return output_list
+
+def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs, default_cost=1):
+    # once we support pattern matching, we don't need to add class_to_extract now
+    for eclass in eclasses:
+        eclass.metadata['cost'] = 1e9
+        eclass.metadata['argmin'] = None
+    
+    def get_children_cost(enode: ExENode):
+        cost = 0
+        for ecl in enode.children:
+            cost += ecl.metadata['cost']
+        return cost
+    
+    keep_going = True
+    while keep_going:
+        keep_going = False
+        for eclass in eclasses:
+            for enode in eclass.nodes:
+                new_cost = get_children_cost(enode) + costs.get(enode.op, default_cost)
+                if new_cost != enode.metadata.get('cost', None):
+                    keep_going = True
+                    enode.metadata['cost'] = new_cost
+                if enode.metadata['cost'] < eclass.metadata['cost']:
+                    eclass.metadata['cost'] = enode.metadata['cost']
+                    eclass.metadata['argmin'] = enode
+    # Extract
+    def extract(eclass: ExEClass):
+        min_enode = eclass.metadata['argmin']
+        extracted = ExtractedEnode.from_enode(min_enode)
+        for c in min_enode.children:
+            extracted.children.append(extract(c))
+        return extracted
+    return extract(class_to_extract)
+
 
 # TESTS
 def test_node_hash():
@@ -203,8 +303,7 @@ def test_node_hash():
     s = set([x, y])
     assert len(s) == 1
 
-
-if __name__ == '__main__':
+def test_basic_example():
     egraph = EGraph()
     one = Node(1)
     two = Node(2)
@@ -212,13 +311,66 @@ if __name__ == '__main__':
     egraph.add(one)
     egraph.add(two)
     egraph.add(x)
+    one1, two1 = Node(1), Node(2)
+    egraph.add(one1)
+    egraph.add(two1)
     plus = Node('+', (egraph.get_node_eclass_id(one), egraph.get_node_eclass_id(x)))
-    plus2 = Node('+', (egraph.get_node_eclass_id(one), egraph.get_node_eclass_id(two)))
+    plus2 = Node('+', (egraph.get_node_eclass_id(one1), egraph.get_node_eclass_id(two1)))
     egraph.add(plus)
     egraph.merge(egraph.get_node_eclass_id(x), egraph.get_node_eclass_id(two))
     egraph.process_unions()
     eclasses, x_enodes = export_egraph(egraph)
     print([ec.full_repr() for ec in eclasses.values()])
     print(x_enodes)
-    # x = Node("+", [Node("1", []), Node("*", [Node("2", []), Node("3", [])])])
-    # print(x)
+
+
+if __name__ == '__main__':
+    egraph = EGraph()
+    # add (x * 2) / 2
+    egraph.add(Node(2))
+    egraph.add(Node('x'))
+    times = Node('*', (egraph.get_node_eclass_id(Node(2)), egraph.get_node_eclass_id(Node('x'))))
+    egraph.add(times)
+    div = Node('/', (egraph.get_node_eclass_id(times), egraph.get_node_eclass_id(Node(2))))
+    egraph.add(div)
+    output_eclass_id = egraph.get_node_eclass_id(div)
+    # add (x << 1) == (x * 2)
+    egraph.add(Node(1))
+    lshift = Node('<<', (egraph.get_node_eclass_id(Node('x')), egraph.get_node_eclass_id(Node(1))))
+    egraph.add(lshift)
+    egraph.merge(egraph.get_node_eclass_id(lshift), egraph.get_node_eclass_id(times))
+
+    # (x * 2) / 2 = x * (2 / 2)
+    print("(x * 2) / 2 = x * (2 / 2)")
+    div2 = Node('/', (egraph.get_node_eclass_id(Node(2)), egraph.get_node_eclass_id(Node(2))))
+    egraph.add(div2)
+    times2 = Node('*', (egraph.get_node_eclass_id(Node('x')), egraph.get_node_eclass_id(div2)))
+    egraph.add(times2)
+    egraph.merge(egraph.get_node_eclass_id(div), egraph.get_node_eclass_id(times2))
+    # 2 / 2 = 1
+    print('2/2=1')
+    egraph.merge(egraph.get_node_eclass_id(div2), egraph.get_node_eclass_id(Node(1)))
+    egraph.process_unions()
+
+    # x * 1 = x
+    old = Node('*', (egraph.get_node_eclass_id(Node('x')), egraph.get_node_eclass_id(Node(1))))
+    egraph.merge(egraph.get_node_eclass_id(old), egraph.get_node_eclass_id(Node('x')))
+    egraph.process_unions()
+    # print(egraph.node2id)
+
+    eclasses, x_enodes = export_egraph(egraph)
+    # print([ec.full_repr() for ec in eclasses.values()])
+    min_expr = extract_egraph_local_cost(eclasses.values(), eclasses[output_eclass_id], costs={'<<': 0.5})
+    print(f'Best expr: {min_expr}')
+
+# Observations
+# 1. ok like why are we just holding a bunch of nodes that we're not using?
+# when we merge, we merge class1.nodes, class2.nodes. Do we even need a union find then??
+# 2. you might not actually have some form of nodes in node2id, so we added
+# if node in self.node2id: self.node2id.pop(node) to process_unions. not sure when this would happen...
+# 3. extraction process is...interesting, because you might have e.g. x * 0 = 0, x*0 and 0 are in the same class so you are recursing on yourself
+
+# next steps:
+# - change the format of the graph, this is kinda dumb
+# - add analysis for joins and add that to rebuilding
+# - add the rewrite VM
