@@ -64,6 +64,7 @@ class EGraph:
         self.curr_eclass_id = 1 # new eclass id
         # self.nodes = []
         self.node2id = dict()
+        self.ids_to_remove = [] # eclass ids to remove
         self.pending = []
         self.analysis_pending = []
         self.id2eclass = dict() # id2eclass
@@ -106,10 +107,11 @@ class EGraph:
     
     def merge(self, eid1: int, eid2: int):
         """Merges two eclass ids"""
-        # print(f'merging {eid1}, {eid2}')
+        print(f'merging {eid1}, {eid2}')
         # perform_union egraph.rs 1144
         # we can see that at 1177, we actually remove class2 and add class2 nodes to class1
-        eid1, eid2 = (eid1, eid2) if len(self.id2eclass[eid1].parents) >= len(self.id2eclass[eid2].parents) else (eid2, eid1)
+        # WE CAN'T REORDER eid1, eid2 based on parents size because scipy automatically reorders them for their disjoin set anyways...
+        # eid1, eid2 = (eid1, eid2) if len(self.id2eclass[eid1].parents) >= len(self.id2eclass[eid2].parents) else (eid2, eid1)
         merged = self.unionfind.merge(eid1, eid2) # I think eid1 will be the new root
         new_id = self.find(eid1)
         if not merged: # xy already merged
@@ -122,9 +124,10 @@ class EGraph:
         
         # NOTE in the egg source code, they self.classes.remove id2 and then they do concat_vecs on the nodes and parents
         # SO WHAT TF IS THE POINT OF THE UNION FIND THEN???
+        # answer: because the graph is broken, so other stuff still points at the old class. We have to wait till repair
+        # after repairing, the eclass for eid2 will be gone.
         self.id2eclass[new_id].nodes = self.id2eclass[new_id].nodes.union(self.id2eclass[eid2].nodes)
         self.id2eclass[new_id].parents = self.id2eclass[new_id].parents.union(self.id2eclass[eid2].parents)
-
         
         # add class2 to new_id and delete
         # if class1 is not new_id, add class1 to new_id and delete too
@@ -132,16 +135,22 @@ class EGraph:
         # We extend the worklist with the newly merged in nodes' parents
         # So in the paper, they say they extend with the class and look at parents.
         # here, they extend with parents and look at children I think
-        self.pending.extend(self.id2eclass[eid2].parents)
-        # since we merged, we also have to add eid1's parents
-        self.pending.extend(self.id2eclass[eid1].parents)
+        print(f'{new_id=}, {eid1=} {eid2=}')
+        if new_id != eid2:
+            self.pending.extend(self.id2eclass[eid2].parents)
+            self.ids_to_remove.append(eid2)
+        if new_id != eid1:
+            self.pending.extend(self.id2eclass[eid1].parents)
+            self.ids_to_remove.append(eid1)
+        print(f'{self.pending=}')
         return new_id
     
     def process_unions(self):
         # egraph.rs 1333
+        print(f'processing unions, {self.ids_to_remove=}')
         while len(self.pending):
             eclass_id = self.pending.pop()
-            eclass: EClass = self.id2eclass[eclass_id]
+            eclass: EClass = self.id2eclass[self.find(eclass_id)]
             nodes = list(eclass.nodes)
             # print(f'repairing {eclass_id} {nodes}')
             for node in nodes:
@@ -158,6 +167,9 @@ class EGraph:
                 self.node2id[new_node] = self.find(eclass_id)
                 eclass.nodes.remove(node)
                 eclass.nodes.add(new_node)
+        for eid in self.ids_to_remove:
+            if eid in self.id2eclass:
+                self.id2eclass.pop(eid)
 
 
 # pattern matcher
@@ -375,3 +387,8 @@ if __name__ == '__main__':
 # - change the format of the graph, this is kinda dumb
 # - add analysis for joins and add that to rebuilding
 # - add the rewrite VM
+
+# current case
+# - union, you still need to copy your children and stuff, but you have to support 
+# a new data struct just to keep track of what's where cuz it's so messy
+# - you have to update the hashcons too, but that needs to happen either way...
