@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+from util import Hashabledict
 
 from scipy.cluster.hierarchy import DisjointSet
 
@@ -12,6 +13,11 @@ class Node:
     """
     op: str
     children: tuple = field(default_factory=tuple) # list of eclass ids as the children. ORDER MATTERS!!
+    metadata: Hashabledict = field(default_factory=Hashabledict)
+
+    def __post_init__(self):
+        if not isinstance(self.metadata, Hashabledict):
+            object.__setattr__(self, "metadata", Hashabledict(self.metadata))
 
     def discriminant(self): # discriminant quickly lets us figure out if two things aren't equal
         return self.op
@@ -335,45 +341,6 @@ def test_basic_example():
     print([ec.full_repr() for ec in eclasses.values()])
     print(x_enodes)
 
-
-if __name__ == '__main__':
-    egraph = EGraph()
-    # add (x * 2) / 2
-    egraph.add(Node(2))
-    egraph.add(Node('x'))
-    times = Node('*', (egraph.get_node_eclass_id(Node(2)), egraph.get_node_eclass_id(Node('x'))))
-    egraph.add(times)
-    div = Node('/', (egraph.get_node_eclass_id(times), egraph.get_node_eclass_id(Node(2))))
-    egraph.add(div)
-    output_eclass_id = egraph.get_node_eclass_id(div)
-    # add (x << 1) == (x * 2)
-    egraph.add(Node(1))
-    lshift = Node('<<', (egraph.get_node_eclass_id(Node('x')), egraph.get_node_eclass_id(Node(1))))
-    egraph.add(lshift)
-    egraph.merge(egraph.get_node_eclass_id(lshift), egraph.get_node_eclass_id(times))
-
-    # (x * 2) / 2 = x * (2 / 2)
-    print("(x * 2) / 2 = x * (2 / 2)")
-    div2 = Node('/', (egraph.get_node_eclass_id(Node(2)), egraph.get_node_eclass_id(Node(2))))
-    egraph.add(div2)
-    times2 = Node('*', (egraph.get_node_eclass_id(Node('x')), egraph.get_node_eclass_id(div2)))
-    egraph.add(times2)
-    egraph.merge(egraph.get_node_eclass_id(div), egraph.get_node_eclass_id(times2))
-    # 2 / 2 = 1
-    print('2/2=1')
-    egraph.merge(egraph.get_node_eclass_id(div2), egraph.get_node_eclass_id(Node(1)))
-    egraph.process_unions()
-
-    # x * 1 = x
-    old = Node('*', (egraph.get_node_eclass_id(Node('x')), egraph.get_node_eclass_id(Node(1))))
-    egraph.merge(egraph.get_node_eclass_id(old), egraph.get_node_eclass_id(Node('x')))
-    egraph.process_unions()
-    # print(egraph.node2id)
-
-    eclasses, x_enodes = export_egraph(egraph)
-    # print([ec.full_repr() for ec in eclasses.values()])
-    min_expr = extract_egraph_local_cost(eclasses.values(), eclasses[output_eclass_id], costs={'<<': 0.5})
-    print(f'Best expr: {min_expr}')
 
 # Observations
 # 1. ok like why are we just holding a bunch of nodes that we're not using?
