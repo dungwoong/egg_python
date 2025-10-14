@@ -22,7 +22,7 @@ class Node:
     def discriminant(self): # discriminant quickly lets us figure out if two things aren't equal
         return self.op
 
-    def matches(self, other: "Node") -> bool:
+    def matches(self, other) -> bool:
         """
         Match only on operator and arity
         """
@@ -89,11 +89,20 @@ class EGraph:
     
     def canonicalize(self, enode: Node):
         new_children = tuple(self.find(e) for e in enode.children)
-        return Node(enode.op, new_children)
+        return Node(enode.op, new_children, enode.metadata)
     
     def get_node_eclass_id(self, enode: Node):
         enode = self.canonicalize(enode)
         return self.node2id[enode]
+    
+    def get_eclass_by_id(self, eclass_id) -> EClass:
+        return self.id2eclass[self.unionfind[eclass_id]]
+    
+    def get_node_eclass(self, node: Node) -> EClass:
+        return self.get_eclass_by_id(self.node2id[node])
+    
+    def get_all_eclasses(self):
+        return set(self.get_eclass_by_id(v) for v in self.node2id.values())
 
     def new_singleton_eclass(self, node: Node):
         eclass = EClass(self.curr_eclass_id)
