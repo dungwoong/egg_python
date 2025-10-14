@@ -1,7 +1,7 @@
 from egraph import *
 
 def a_time_divide_example():
-    egraph = EGraph()
+    egraph = EGraph(debug=True)
     # add (x * 2) / 2
     egraph.add(Node(2))
     egraph.add(Node('x'))
@@ -46,4 +46,5 @@ def hashable_dict_example():
     print(n2.metadata.get('c', 0))
 
 if __name__ == '__main__':
-    hashable_dict_example()
+    # hashable_dict_example()
+    a_time_divide_example()

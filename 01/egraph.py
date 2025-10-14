@@ -65,7 +65,8 @@ class EGraph:
 
     id2eclass: Dict[int, EClass] # eclass id to eclass object, M(map)?
 
-    def __init__(self):
+    def __init__(self, debug=False):
+        self.debug = debug
         self.unionfind = DisjointSet()
         self.curr_eclass_id = 1 # new eclass id
         # self.nodes = []
@@ -122,18 +123,12 @@ class EGraph:
         new_id = self.find(eid1)
         if not merged: # xy already merged
             return new_id
-
-        # maybe just canonicalize eid2 here?
-        for n in self.id2eclass[eid2].nodes:
-            # nothing should change with the nodes, so let's just update their hashcons entry
-            self.node2id[self.canonicalize(n)] = new_id
         
         # NOTE in the egg source code, they self.classes.remove id2 and then they do concat_vecs on the nodes and parents
         # SO WHAT TF IS THE POINT OF THE UNION FIND THEN???
         # answer: because the graph is broken, so other stuff still points at the old class. We have to wait till repair
         # after repairing, the eclass for eid2 will be gone.
-        self.id2eclass[new_id].nodes = self.id2eclass[new_id].nodes.union(self.id2eclass[eid2].nodes)
-        self.id2eclass[new_id].parents = self.id2eclass[new_id].parents.union(self.id2eclass[eid2].parents)
+        
         
         # add class2 to new_id and delete
         # if class1 is not new_id, add class1 to new_id and delete too
@@ -143,16 +138,27 @@ class EGraph:
         # here, they extend with parents and look at children I think
         print(f'{new_id=}, {eid1=} {eid2=}')
         if new_id != eid2:
+            self.id2eclass[new_id].nodes = self.id2eclass[new_id].nodes.union(self.id2eclass[eid2].nodes)
+            self.id2eclass[new_id].parents = self.id2eclass[new_id].parents.union(self.id2eclass[eid2].parents)
             self.pending.extend(self.id2eclass[eid2].parents)
             self.ids_to_remove.append(eid2)
+
+            # We look at parents in the pending so let's update hashcons for children here
+            for n in self.id2eclass[eid2].nodes:
+                self.node2id[self.canonicalize(n)] = new_id
         if new_id != eid1:
+            self.id2eclass[new_id].nodes = self.id2eclass[new_id].nodes.union(self.id2eclass[eid1].nodes)
+            self.id2eclass[new_id].parents = self.id2eclass[new_id].parents.union(self.id2eclass[eid1].parents)
             self.pending.extend(self.id2eclass[eid1].parents)
             self.ids_to_remove.append(eid1)
+            for n in self.id2eclass[eid1].nodes:
+                self.node2id[self.canonicalize(n)] = new_id
         print(f'{self.pending=}')
         return new_id
     
     def process_unions(self):
         # egraph.rs 1333
+        # TODO maybe find for every parent and remove dupes
         print(f'processing unions, {self.ids_to_remove=}')
         while len(self.pending):
             eclass_id = self.pending.pop()
@@ -176,6 +182,16 @@ class EGraph:
         for eid in self.ids_to_remove:
             if eid in self.id2eclass:
                 self.id2eclass.pop(eid)
+        if self.debug:
+            # map should only contain ids of representatives(I added this)
+            assert all(k in self.node2id.values() for k in self.id2eclass)
+
+            # hashcons should not point to any outdated e-classes
+            assert all(self.find(k) == k for k in self.node2id.values()), self.node2id.values()
+
+            # all items in hashcons should be canonicalized
+            for n in self.node2id:
+                assert self.canonicalize(n) == n, (self.canonicalize(n), n)
 
 
 # pattern matcher
