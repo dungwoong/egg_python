@@ -28,7 +28,8 @@ class ApplierProgram:
             node2eclassid[node] = self.egraph.add(node_to_add)
         
         for old_root, new_root in self.to_bind:
-            old_root_eclass = self.egraph.get_node_eclass_id(bindings[old_root])
+            # old_root_eclass = self.egraph.get_node_eclass_id(bindings[old_root])
+            old_root_eclass = self.egraph.node2id[bindings[old_root]] # don't use canonicalized since graph is broken
             self.egraph.merge(old_root_eclass, node2eclassid[new_root])
 
 class ApplierCompiler:
@@ -50,25 +51,28 @@ class ApplierCompiler:
 class Rewrite:
     matcher: MatcherProgram
     applier: ApplierProgram
+    label: str
 
-    def __init__(self, matcher: MatcherProgram, applier: ApplierProgram):
+    def __init__(self, matcher: MatcherProgram, applier: ApplierProgram, label=""):
         self.matcher = matcher
         self.applier = applier
+        self.label = label
     
     def reset(self):
         self.matcher.matches = []
     
     def find_rewrites(self):
         self.matcher.run()
+        print(f'[debug] {self.label}_rewriter found {len(self.matcher.matches)} items')
     
     def apply_rewrites(self):
         for binding in self.matcher.matches:
             self.applier.run(binding)
     
     @staticmethod
-    def new(old_ast_roots, new_ast_roots, egraph):
+    def new(old_ast_roots, new_ast_roots, egraph, label=""):
         matcher_compiler = MatcherCompiler(egraph)
         applier_compiler = ApplierCompiler(egraph)
         matcher = matcher_compiler.compile(old_ast_roots)
         applier = applier_compiler.compile(old_ast_roots, new_ast_roots)
-        return Rewrite(matcher, applier)
+        return Rewrite(matcher, applier, label)

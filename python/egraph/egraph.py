@@ -30,6 +30,10 @@ class Node:
         """
         return self.op == other.op and len(self.children) == len(other.children)
 
+    def __repr__(self):
+        return f'N({self.op}{", " if self.children else ""}{self.children if self.children else ""})'
+
+
 # eclass class
 class EClass:
     """
@@ -52,6 +56,10 @@ class EClass:
         # we can see that since enode.children was eclass ids, parents is tracked in here
         # for merge, rebuild etc.
         self.parents = set() if parents is None else set(parents)
+    
+    def __repr__(self):
+        nodes = ', '.join(str(n) for n in self.nodes)
+        return f'C{self.id}({nodes})'
 
 
 # egraph with UMH
@@ -77,6 +85,9 @@ class EGraph:
         self.pending = []
         self.analysis_pending = []
         self.id2eclass = dict() # id2eclass
+    
+    def debug_print(self):
+        print(', '.join(str(c) for c in self.id2eclass.values()))
     
     def add_to_unionfind(self, eclass_id: int):
         assert eclass_id not in self.unionfind
@@ -130,6 +141,8 @@ class EGraph:
     def merge(self, eid1: int, eid2: int):
         """Merges two eclass ids"""
         print(f'merging {eid1}, {eid2}')
+        if eid1 == eid2:
+            return eid1
         # perform_union egraph.rs 1144
         # we can see that at 1177, we actually remove class2 and add class2 nodes to class1
         # WE CAN'T REORDER eid1, eid2 based on parents size because scipy automatically reorders them for their disjoin set anyways...

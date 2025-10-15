@@ -127,9 +127,10 @@ class MatcherProgram:
         for n in self.bindings[reference].nodes:
             p = self.copy()
             if not p._bind(n, reference):
-                return False
+                continue
             if p.run(inst_ptr - 1):
                 return True # find 1 match, we're good.
+        return False
         
     def _bind(self, node: Node, reference: ASTNode):
         """
