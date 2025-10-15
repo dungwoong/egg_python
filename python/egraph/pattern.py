@@ -39,10 +39,10 @@ def get_variable_bindings(ast_root):
             continue
         seen.add(curr)
         bindings[curr] = None
-        if curr.op.startswith('?'):
+        if isinstance(curr.op, str) and curr.op.startswith('?'):
             bindings[curr.op] = None
         for m in curr.metadata.values():
-            if m.startswith('?'):
+            if isinstance(m, str) and m.startswith('?'):
                 bindings[m] = None
         stack.extend(curr.children)
     return bindings
@@ -126,8 +126,13 @@ class Program:
 
     
     def _check_or_bind_item(self, k, v):
+        # already bound, has to be the same
         if self.bindings.get(k, None) is not None and self.bindings.get(k, None) != v:
             return False
+        # it's not an arbitrary binding
+        if k not in self.bindings and k != v:
+            return False
+        # bind it
         self.bindings[k] = v
         return True
     
@@ -244,7 +249,7 @@ if __name__ == '__main__':
     a = ASTNode('?A', metadata={'rows': '?m', 'cols': '?k'})
     # exp = ASTNode('exp', children=[a], metadata={'rows': '?m', 'cols': '?k'})
     b = ASTNode('?B', metadata={'rows': '?k', 'cols': '?n'})
-    base = ASTNode('mm', children=[a, b], metadata={'rows': '?m', 'cols': '?n'})
+    base = ASTNode('mm', children=[a, b], metadata={'rows': 2, 'cols': 5})
     egraph = EGraph()
     a_node = Node('a', metadata={'rows': 2, 'cols': 3})
     b_node = Node('b', metadata={'rows': 3, 'cols': 5})
