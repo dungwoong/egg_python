@@ -51,7 +51,7 @@ def did_yield(gen):
         yield v
     return yielded
 
-class Program:
+class MatcherProgram:
     def __init__(self, egraph):
         self.egraph = egraph
         self.instructions = []
@@ -61,7 +61,7 @@ class Program:
     def copy(self):
         # copies everything except for matches(we just add to one main list)
         # and instructions(we just read from same instr set, but we have a ptr)
-        p = Program(self.egraph)
+        p = MatcherProgram(self.egraph)
         p.instructions = self.instructions
         p.bindings = self.bindings.copy()
         p.matches = self.matches
@@ -190,7 +190,7 @@ class Program:
 
 class Compiler:
     def __init__(self, egraph):
-        self.program = Program(egraph)
+        self.program = MatcherProgram(egraph)
     
     # in case we have a program class later and want to change the impl
     def get_instructions(self):
