@@ -5,8 +5,6 @@ from egraph.egraph import Node, EGraph, EClass
 
 class Instruction(Enum):
     BIND = 'BIND' # bind to a new node. If there's an op, make sure eclass has a node with that op in it
-    COMPARE = 'COMPARE' # compare an e-class to another e-class, make sure they have the same id
-    LOOKUP = 'LOOKUP' # If we have all children, we can just lookup from children to see if there's a matching pattern to save time
     SCAN = 'SCAN' # literally look through all eclasses to try running the remaining instructions
 
     def __repr__(self):
