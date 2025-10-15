@@ -2,6 +2,7 @@ from typing import List
 from egraph.egraph import EGraph, Node
 from egraph.pattern import MatcherProgram, ASTNode, MatcherCompiler
 from egraph.util import topology_sort
+from egraph.logging import rewrite_logger as logger
 
 # A rewrite consists of a matcher program and an applier
 # both M and A will have references to the egraphs so no need to worry
@@ -63,7 +64,7 @@ class Rewrite:
     
     def find_rewrites(self):
         self.matcher.run()
-        print(f'[debug] {self.label}_rewriter found {len(self.matcher.matches)} items')
+        logger.debug(f'{"no_label" if not self.label else self.label} found {len(self.matcher.matches)} matches')
     
     def apply_rewrites(self):
         for binding in self.matcher.matches:

@@ -1,5 +1,8 @@
 from egraph.egraph import EGraph, Node, export_egraph, extract_egraph_local_cost
 from egraph.rewrite import Rewrite, ASTNode
+from egraph.logging import silence_all
+
+silence_all()
 
 egraph = EGraph()
 x_id = egraph.add(Node('x'))
@@ -45,10 +48,12 @@ for i in range(3):
     for r in rewrites:
         r.find_rewrites()
     for r in rewrites:
-        print(f'applying {r.label}')
+        # print(f'applying {r.label}')
         r.apply_rewrites()
     egraph.process_unions()
-    egraph.debug_print()
+    # egraph.debug_print()
+
+egraph.debug_print()
 
 eclasses, _ = export_egraph(egraph)
 # TODO in the future, probably don't wanna have to hardcode div_id in here

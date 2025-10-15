@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import List
 from egraph.egraph import Node, EGraph, EClass
+from egraph.logging import rewrite_logger as logger
+
 # I want a pattern to 
 # patterns contain nodes. It binds stuff to each node like the node might have inner variables
 

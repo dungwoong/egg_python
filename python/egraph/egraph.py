@@ -4,6 +4,8 @@ from egraph.util import Hashabledict
 
 from scipy.cluster.hierarchy import DisjointSet
 
+from egraph.logging import egraph_logger as logger
+
 @dataclass(frozen=True) # TODO figure out which things are most important here
 class Node:
     """
@@ -140,7 +142,7 @@ class EGraph:
     
     def merge(self, eid1: int, eid2: int):
         """Merges two eclass ids"""
-        print(f'merging {eid1}, {eid2}')
+        logger.debug(f'merging {eid1}, {eid2}')
         if eid1 == eid2:
             return eid1
         # perform_union egraph.rs 1144
@@ -164,7 +166,7 @@ class EGraph:
         # We extend the worklist with the newly merged in nodes' parents
         # So in the paper, they say they extend with the class and look at parents.
         # here, they extend with parents and look at children I think
-        print(f'{new_id=}, {eid1=} {eid2=}')
+        logger.debug(f'{new_id=}, {eid1=} {eid2=}')
         if new_id != eid2:
             self.id2eclass[new_id].nodes = self.id2eclass[new_id].nodes.union(self.id2eclass[eid2].nodes)
             self.id2eclass[new_id].parents = self.id2eclass[new_id].parents.union(self.id2eclass[eid2].parents)
@@ -181,21 +183,21 @@ class EGraph:
             self.ids_to_remove.append(eid1)
             for n in self.id2eclass[eid1].nodes:
                 self.node2id[self.canonicalize(n)] = new_id
-        print(f'{self.pending=}')
+        logger.debug(f'{self.pending=}')
         return new_id
     
     def process_unions(self):
         # egraph.rs 1333
         # TODO maybe find for every parent and remove dupes
-        print(f'processing unions, {self.ids_to_remove=}')
+        logger.debug(f'processing unions, {self.ids_to_remove=}')
         while len(self.pending):
             eclass_id = self.pending.pop()
             eclass: EClass = self.id2eclass[self.find(eclass_id)]
             nodes = list(eclass.nodes)
-            # print(f'repairing {eclass_id} {nodes}')
+            # logger.debug(f'repairing {eclass_id} {nodes}')
             for node in nodes:
                 new_node = self.canonicalize(node)
-                # print(f'{node} -> {new_node}')
+                # logger.debug(f'{node} -> {new_node}')
 
                 already_in_memo = not new_node.matches(node) and new_node in self.node2id
                 
@@ -301,29 +303,6 @@ def export_egraph(egraph: EGraph):
         n.children = tuple(eclasses[egraph.unionfind[c]] for c in n.children)
     return eclasses, x_enodes
 
-# def topology_sort(classes: List[ExEClass], parents_first=True):
-#     stack = list(classes)
-#     output_list = []
-#     started = dict()
-#     finished = dict()
-#     time = 0
-#     while len(stack):
-#         time += 1
-#         curr = stack.pop()
-#         if curr in finished:
-#             continue
-#         if curr in started:
-#             finished[curr] = time
-#             continue
-#         output_list.append(curr)
-#         started[curr] = time
-#         stack.append(curr)
-#         children = curr.get_children()
-#         for child in children:
-#             stack.append(child)
-#     output_list = list(sorted(output_list, key=lambda n: finished[n], reverse=parents_first))
-#     return output_list
-
 def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs, default_cost=1):
     # once we support pattern matching, we don't need to add class_to_extract now
     for eclass in eclasses:
@@ -357,33 +336,6 @@ def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs,
         return extracted
     return extract(class_to_extract)
 
-
-# TESTS
-def test_node_hash():
-    x = Node('+', (1, 2))
-    y = Node('+', (1, 2))
-    s = set([x, y])
-    assert len(s) == 1
-
-def test_basic_example():
-    egraph = EGraph()
-    one = Node(1)
-    two = Node(2)
-    x = Node('x')
-    egraph.add(one)
-    egraph.add(two)
-    egraph.add(x)
-    one1, two1 = Node(1), Node(2)
-    egraph.add(one1)
-    egraph.add(two1)
-    plus = Node('+', (egraph.get_node_eclass_id(one), egraph.get_node_eclass_id(x)))
-    plus2 = Node('+', (egraph.get_node_eclass_id(one1), egraph.get_node_eclass_id(two1)))
-    egraph.add(plus)
-    egraph.merge(egraph.get_node_eclass_id(x), egraph.get_node_eclass_id(two))
-    egraph.process_unions()
-    eclasses, x_enodes = export_egraph(egraph)
-    print([ec.full_repr() for ec in eclasses.values()])
-    print(x_enodes)
 
 
 # Observations
