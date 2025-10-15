@@ -1,4 +1,4 @@
-from egraph import *
+from egraph.egraph import *
 
 def a_time_divide_example():
     egraph = EGraph(debug=True)

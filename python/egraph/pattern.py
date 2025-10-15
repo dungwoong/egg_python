@@ -1,6 +1,5 @@
-from util import Hashabledict
 from enum import Enum
-from egraph import Node, EGraph, EClass
+from egraph.egraph import Node, EGraph, EClass
 # I want a pattern to 
 # patterns contain nodes. It binds stuff to each node like the node might have inner variables
 
@@ -73,10 +72,18 @@ class Program:
     def run(self, inst_ptr=None):
         """
         Returns whether we added a match
+        - BIND: If some e-class corresponds to a node, we look for suitable candidates for node bindings within that class
+          Also adds e-classes for the leaves, so the idea is to bind the leaves after
+        - SCAN: scans all classes. Adds an eclass to correspond to some node
+        
+        So the idea is to first scan for a root node, and then just repeatedly bind until we're done.
+        Idea: at the end, each binding should be a node, and not an eclass
         """
         # start from the right, and go left
         inst_ptr = len(self.instructions) - 1 if inst_ptr is None else inst_ptr
         if inst_ptr < 0:
+            for v in self.bindings.values():
+                assert not isinstance(v, EClass), 'Bindings shouldnt be eclass'
             self.matches.append(self.bindings.copy())
             return True
         curr_instr = self.instructions[inst_ptr]
@@ -89,32 +96,6 @@ class Program:
             case _:
                 raise NotImplementedError('Instruction not supported')
         return output
-
-    def execute_instruction(self, instruction: Instruction, args):
-        """
-        INSTRUCTION SET
-        scan and scan_eclass are like for loops
-        - SCAN: search all e-classes, iterate through each node
-        - SCAN_ECLASS: for an e-class, iterate through all nodes and try to bind or smth
-        - BIND: attempt to bind a node to an item
-        - [REMOVED]COMPARE: compare a node to another node
-        - that lookup thing(later)
-
-        What if we just make bind also process the children. We just set the children
-        to whatever they should be binded to, and run a compare if necessary. Otherwise
-        we just set the bindings to the e-class for now, and later
-        we will call bind again on that child to check the binding.
-
-        So when we're adding this temp thing
-        - if there's nothing yet, just add it
-        - if the added thing is a node, check that we got the same e-class
-        - if the added thing is an e-class, check that we got the same e-class
-        """
-        match instruction:
-            case Instruction.BIND:
-                self.bind(*args)
-            case _:
-                raise NotImplementedError('Instruction not supported')
     
     def bind_node_elements(self, node: Node, reference: ASTNode):
         if reference.op in self.bindings:
@@ -148,7 +129,7 @@ class Program:
             p = self.copy()
             if not p._bind(n, reference):
                 return False
-            if p.run(inst_ptr - 1): # TODO
+            if p.run(inst_ptr - 1):
                 return True # find 1 match, we're good.
         
     def _bind(self, node: Node, reference: ASTNode):

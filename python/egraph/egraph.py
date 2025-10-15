@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
-from util import Hashabledict
+from egraph.util import Hashabledict
 
 from scipy.cluster.hierarchy import DisjointSet
 
@@ -112,6 +112,9 @@ class EGraph:
         return eclass.id
     
     def add(self, enode: Node):
+        """
+        Adds a node. Returns the eclass id of the node
+        """
         enode = self.canonicalize(enode)
         if enode in self.node2id: # hashcons(?)
             return self.node2id[enode]
@@ -120,6 +123,7 @@ class EGraph:
             self.id2eclass[child_eclass_id].parents.add(eclass_id)
         self.unionfind.add(eclass_id)
         self.node2id[enode] = eclass_id
+        return eclass_id
     
     def merge(self, eid1: int, eid2: int):
         """Merges two eclass ids"""
