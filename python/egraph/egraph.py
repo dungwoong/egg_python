@@ -18,6 +18,8 @@ class Node:
     def __post_init__(self):
         if not isinstance(self.metadata, Hashabledict):
             object.__setattr__(self, "metadata", Hashabledict(self.metadata))
+        if not isinstance(self.children, tuple):
+            object.__setattr__(self, "children", tuple(self.children))
 
     def discriminant(self): # discriminant quickly lets us figure out if two things aren't equal
         return self.op

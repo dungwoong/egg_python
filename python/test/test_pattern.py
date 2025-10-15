@@ -1,4 +1,4 @@
-from egraph.pattern import ASTNode, Compiler
+from egraph.pattern import ASTNode, MatcherCompiler
 from egraph.egraph import EGraph, Node
 
 def _rewrite_test(expected_matches, base_rows=2, base_op='mm', a_node_k=3):
@@ -17,7 +17,7 @@ def _rewrite_test(expected_matches, base_rows=2, base_op='mm', a_node_k=3):
     egraph.add(mm_node)
     
     # Compile
-    comp = Compiler(egraph)
+    comp = MatcherCompiler(egraph)
     comp.compile([base])
     
     comp.program.run()
@@ -39,3 +39,71 @@ def test_rewrite_incorrect_2():
 
 def test_rewrite_incorrect_3():
     _rewrite_test(0, base_rows=3)
+
+
+def test_multipattern():
+    # maybe look for A + C and B * C
+    a = ASTNode('?A')
+    b = ASTNode('?B')
+    c = ASTNode('?C')
+    plus = ASTNode('+', [a, c])
+    times = ASTNode('*', [b, c])
+
+    egraph = EGraph()
+    a_class = egraph.add(Node('x'))
+    b_class = egraph.add(Node('y'))
+    c_class = egraph.add(Node('z'))
+    plus_node = Node('+', (a_class, c_class))
+    egraph.add(plus_node)
+    times_node = Node('*', (b_class, c_class))
+    egraph.add(times_node)
+
+    program = MatcherCompiler(egraph).compile([plus, times])
+    program.run()
+    assert len(program.matches) == 1
+
+def test_multipattern_fail():
+    # maybe look for A + C and B * C
+    a = ASTNode('?A')
+    b = ASTNode('?B')
+    c = ASTNode('?C')
+    plus = ASTNode('+', [a, c])
+    times = ASTNode('*', [b, c])
+
+    egraph = EGraph()
+    a_class = egraph.add(Node('x'))
+    b_class = egraph.add(Node('y'))
+    c_class = egraph.add(Node('z'))
+    d_class = egraph.add(Node('w'))
+    plus_node = Node('+', (a_class, c_class))
+    egraph.add(plus_node)
+    times_node = Node('*', (b_class, d_class))
+    egraph.add(times_node)
+
+    program = MatcherCompiler(egraph).compile([plus, times])
+    program.run()
+    assert len(program.matches) == 0
+
+def test_multipattern_double():
+    # maybe look for A + C and B * C
+    a = ASTNode('?A')
+    b = ASTNode('?B')
+    c = ASTNode('?C')
+    plus = ASTNode('+', [a, c])
+    times = ASTNode('*', [b, c])
+
+    egraph = EGraph()
+    a_class = egraph.add(Node('x'))
+    b_class = egraph.add(Node('y'))
+    c_class = egraph.add(Node('z'))
+    d_class = egraph.add(Node('w'))
+    plus_node = Node('+', (a_class, c_class))
+    egraph.add(plus_node)
+    times_node = Node('*', (b_class, c_class))
+    egraph.add(times_node)
+    plus_node_2 = Node('+', (d_class, c_class))
+    egraph.add(plus_node_2)
+
+    program = MatcherCompiler(egraph).compile([plus, times])
+    program.run()
+    assert len(program.matches) == 2

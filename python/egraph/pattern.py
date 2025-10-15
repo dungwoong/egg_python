@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 from egraph.egraph import Node, EGraph, EClass
 # I want a pattern to 
 # patterns contain nodes. It binds stuff to each node like the node might have inner variables
@@ -188,7 +189,7 @@ class MatcherProgram:
         return match_found
 
 
-class Compiler:
+class MatcherCompiler:
     def __init__(self, egraph):
         self.program = MatcherProgram(egraph)
     
@@ -209,7 +210,7 @@ class Compiler:
         self.get_instructions().append((Instruction.SCAN, ast_root)) # try to bind eclass to the root
 
 
-    def compile(self, ast_roots: list): # for multipatterns, you can have multiple ASTs
+    def compile(self, ast_roots: List[ASTNode]): # for multipatterns, you can have multiple ASTs
         stack = list(ast_roots)
         seen = set() # ast nodes that we've seen
         while stack:
@@ -223,6 +224,7 @@ class Compiler:
             self.get_instructions().append((Instruction.BIND, curr))
             stack.extend(curr.children)
         self.program.instructions = list(reversed(self.program.instructions)) # first instr at end
+        return self.program
 
 if __name__ == '__main__':
     a = ASTNode('?A', metadata={'rows': '?m', 'cols': '?k'})
@@ -236,7 +238,7 @@ if __name__ == '__main__':
     egraph.add(b_node)
     mm_node = Node('mm', (egraph.get_node_eclass_id(a_node), egraph.get_node_eclass_id(b_node)), metadata={'rows': 2, 'cols': 5})
     egraph.add(mm_node)
-    comp = Compiler(egraph)
+    comp = MatcherCompiler(egraph)
     comp.compile([base])
     print(comp.program.instructions)
     # print(comp.program.bindings)
