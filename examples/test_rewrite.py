@@ -23,6 +23,7 @@ before_root = ASTNode('/', [ASTNode('?x'), ASTNode('?x')])
 after_root =  ASTNode(1)
 div_rewrite = Rewrite.new([before_root], [after_root], egraph, "div")
 
+# x * 1 = x
 before_root = ASTNode('*', [ASTNode('?x'), ASTNode(1)])
 after_root = ASTNode('?x')
 mult_1_rewrite = Rewrite.new([before_root], [after_root], egraph, "mult1")
