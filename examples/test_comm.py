@@ -17,4 +17,4 @@ for i in range(3):
     # print(commutative_rewrite.matcher.matches)
     commutative_rewrite.apply_rewrites()
     egraph.process_unions()
-    egraph.debug_print()
+    print(egraph.debug_str())

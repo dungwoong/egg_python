@@ -64,6 +64,63 @@ class EClass:
         return f'C{self.id}({nodes})'
 
 
+class EClassAnalysis:
+    """
+    Analysis is tied to some metadata field on a node
+    wait a sec, ok with constant folding, can't we literally just...write them as transforms...
+    """
+    def __init__(self):
+        self.eclass_map = dict() # eclassid : analysis data
+
+    def make(self, enode: Node, eclass_id: int):
+        # saves analysis data to the map
+        raise NotImplementedError()
+
+    def join(self, new_id: int, old_ids: list) -> bool:
+        # for each id in old_ids, join it with new_id and update records
+        # return whether the new data is different than the old data
+        raise NotImplementedError()
+    
+    # modify can just be a rewrite. Let's think about that later.
+    def modify(self, egraph, eclass_id, eclass: EClass) -> bool:
+        # return whether this eclasses analysis changed
+        pass
+
+    def recreate_analysis(self, eclass_id, eclass: EClass) -> bool:
+        # return whether this eclasses analysis changed
+        pass
+
+    def remove(self, eclass_id):
+        if eclass_id in self.eclass_map:
+            self.eclass_map.pop(eclass_id)
+
+class BasicAnalysis(EClassAnalysis):
+    def __init__(self, metadata_field, default_data_value, join_fn, modify):
+        super().__init__()
+        self.field = metadata_field
+        self.default = default_data_value
+        self.join_fn = join_fn
+        self.modify_impl = modify
+    
+    def make(self, enode: Node, eclass_id: int):
+        self.eclass_map[eclass_id] = enode.metadata.get(self.field, self.default)
+    
+    def join(self, new_id: int, old_ids: list) -> bool:
+        old_data = self.eclass_map[new_id]
+        for old_id in old_ids:
+            self.eclass_map[new_id] = self.join_fn(self.eclass_map[new_id], self.eclass_map[old_id])
+        return old_data != self.eclass_map[new_id]
+
+    def recreate_analysis(self, eclass_id, eclass):
+        old_data = self.eclass_map[eclass_id]
+        for n in eclass.nodes:
+            self.eclass_map[eclass_id] = self.join_fn(self.eclass_map[eclass_id], n.metadata.get(self.field, self.default))
+        return old_data != self.eclass_map[eclass_id]
+    
+    def modify(self, egraph, eclass_id, eclass: EClass) -> bool:
+        return self.modify_impl(self, egraph, eclass_id, eclass)
+
+
 # egraph with UMH
 class EGraph:
     unionfind: DisjointSet # U(union find), store eclass_ids
@@ -74,6 +131,8 @@ class EGraph:
 
     pending: list # the worklists
     analysis_pending: list
+
+    analyses: List[EClassAnalysis]
 
     id2eclass: Dict[int, EClass] # eclass id to eclass object, M(map)?
 
@@ -87,9 +146,11 @@ class EGraph:
         self.pending = []
         self.analysis_pending = []
         self.id2eclass = dict() # id2eclass
+
+        self.analyses = []
     
-    def debug_print(self):
-        print(', '.join(str(c) for c in self.id2eclass.values()))
+    def debug_str(self):
+        return ', '.join(str(c) for c in self.id2eclass.values())
     
     def add_to_unionfind(self, eclass_id: int):
         assert eclass_id not in self.unionfind
@@ -122,6 +183,12 @@ class EGraph:
     def new_singleton_eclass(self, node: Node):
         eclass = EClass(self.curr_eclass_id)
         eclass.nodes.add(node)
+
+        # eclass-analysis
+        for a in self.analyses:
+            a.make(node, eclass.id)
+        
+        # bookkeeping
         self.id2eclass[eclass.id] = eclass
         self.curr_eclass_id += 1
         return eclass.id
@@ -153,6 +220,14 @@ class EGraph:
         new_id = self.find(eid1)
         if not merged: # xy already merged
             return new_id
+    
+        analysis_changed = False
+        for a in self.analyses:
+            analysis_changed = a.join(new_id, [eid1, eid2]) or analysis_changed
+        
+        if analysis_changed:
+            self.analysis_pending.extend(self.id2eclass[eid2].parents)
+            self.analysis_pending.extend(self.id2eclass[eid1].parents)
         
         # NOTE in the egg source code, they self.classes.remove id2 and then they do concat_vecs on the nodes and parents
         # SO WHAT TF IS THE POINT OF THE UNION FIND THEN???
@@ -212,6 +287,8 @@ class EGraph:
         for eid in self.ids_to_remove:
             if eid in self.id2eclass:
                 self.id2eclass.pop(eid)
+            for a in self.analyses:
+                a.remove(eid)
         if self.debug:
             # map should only contain ids of representatives(I added this)
             assert all(k in self.node2id.values() for k in self.id2eclass)
@@ -222,9 +299,27 @@ class EGraph:
             # all items in hashcons should be canonicalized
             for n in self.node2id:
                 assert self.canonicalize(n) == n, (self.canonicalize(n), n)
-
-
-# pattern matcher
+    
+    def repair_classes(self):
+        # egraph.rs 1249
+        logger.debug('processing analysis')
+        while len(self.analysis_pending):
+            eclass_id = self.find(self.analysis_pending.pop()) # only deal with most updated
+            eclass: EClass = self.id2eclass[eclass_id]
+            # nodes = list(eclass.nodes)
+            data_changed = False
+            for a in self.analyses:
+                data_changed = a.modify(self, eclass_id, eclass) or data_changed
+                data_changed = a.recreate_analysis(eclass_id, eclass) or data_changed
+            if data_changed:
+                self.analysis_pending.extend(self.id2eclass[eclass_id].parents)
+    
+    def rebuild(self):
+        # this works because process unions will repair the graph completely,
+        # and then repair classes might mess up the graph again but at least it operates on a fixed graph
+        while len(self.pending) or len(self.analysis_pending):
+            self.process_unions()
+            self.repair_classes()
 
 
 

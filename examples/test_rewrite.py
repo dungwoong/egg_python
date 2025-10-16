@@ -51,9 +51,8 @@ for i in range(3):
         # print(f'applying {r.label}')
         r.apply_rewrites()
     egraph.process_unions()
-    # egraph.debug_print()
 
-egraph.debug_print()
+print(egraph.debug_str())
 
 eclasses, _ = export_egraph(egraph)
 # TODO in the future, probably don't wanna have to hardcode div_id in here
