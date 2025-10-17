@@ -19,14 +19,17 @@ class ApplierProgram:
 
         # Add new pattern
         for node in self.children_first_nodes:
-            metadata = dict()
-            op = bindings[node.op] if node.op in bindings else node.op
-            for k in node.metadata:
-                assert node.metadata[k] in bindings or not node.metadata[k].startswith('?')
-                metadata[k] = bindings[node.metadata[k]] if node.metadata[k] in bindings else node.metadata[k]
-            children = tuple(node2eclassid[n] for n in node.children)
-            node_to_add = Node(op, children, metadata)
-            node2eclassid[node] = self.egraph.add(node_to_add)
+            if node in bindings:
+                node2eclassid[node] = self.egraph.get_node_eclass_id(bindings[node])
+            else:
+                metadata = dict()
+                op = bindings[node.op] if node.op in bindings else node.op
+                for k in node.metadata:
+                    assert node.metadata[k] in bindings or not node.metadata[k].startswith('?')
+                    metadata[k] = bindings[node.metadata[k]] if node.metadata[k] in bindings else node.metadata[k]
+                children = tuple(node2eclassid[n] for n in node.children)
+                node_to_add = Node(op, children, metadata)
+                node2eclassid[node] = self.egraph.add(node_to_add)
         
         for old_root, new_root in self.to_bind:
             # old_root_eclass = self.egraph.get_node_eclass_id(bindings[old_root])

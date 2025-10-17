@@ -21,7 +21,10 @@ class Node:
         if not isinstance(self.metadata, Hashabledict):
             object.__setattr__(self, "metadata", Hashabledict(self.metadata))
         if not isinstance(self.children, tuple):
-            object.__setattr__(self, "children", tuple(self.children))
+            if isinstance(self.children, int): # single id
+                object.__setattr__(self, "children", (self.children,))
+            else:
+                object.__setattr__(self, "children", tuple(self.children))
 
     def discriminant(self): # discriminant quickly lets us figure out if two things aren't equal
         return self.op
@@ -177,6 +180,9 @@ class EGraph:
     def get_node_eclass(self, node: Node) -> EClass:
         return self.get_eclass_by_id(self.node2id[node])
     
+    def get_node_eclass_id(self, node: Node) -> int:
+        return self.node2id[node]
+    
     def get_all_eclasses(self):
         return set(self.get_eclass_by_id(v) for v in self.node2id.values())
 
@@ -327,10 +333,13 @@ class EGraph:
 class ExENode:
     op: str
     children: list # initially a list of int, and then we replace them all with e-classes
-    def __init__(self, op, children):
+    def __init__(self, op, children, metadata):
         self.op = op
         self.children = children
-        self.metadata = dict()
+        self.metadata = dict(metadata)
+    
+    def __getitem__(self, key):
+        return self.metadata[key]
     
     def __repr__(self):
         assert all(isinstance(c, ExEClass) for c in self.children)
@@ -342,13 +351,17 @@ class ExtractedEnode:
     """
     op: str
     children: list
-    def __init__(self, op, children=None):
+    metadata: Hashabledict
+    def __init__(self, op, children=None, metadata=None):
+        if metadata is None:
+            metadata = dict()
         self.op = op
         self.children = children if children is not None else []
+        self.metadata = metadata
     
     @staticmethod
     def from_enode(enode: ExENode):
-        return ExtractedEnode(enode.op)
+        return ExtractedEnode(enode.op, enode.children, enode.metadata)
     
     def __repr__(self):
         args = ' '.join([str(c) for c in self.children]) if self.children else ''
@@ -374,6 +387,9 @@ class ExEClass:
             children = children.union(n.children)
         return children
     
+    def __getitem__(self, key):
+        return self.metadata[key]
+    
     def __repr__(self):
         return f'xClass({self.id})'
     
@@ -390,7 +406,7 @@ def export_egraph(egraph: EGraph):
         if repr_id not in eclasses:
             eclasses[repr_id] = ExEClass(repr_id, [])
         x_eclass = eclasses[repr_id]
-        x_enode = ExENode(n.op, n.children)
+        x_enode = ExENode(n.op, n.children, n.metadata)
         x_eclass.add_node(x_enode)
         x_enodes.append(x_enode)
     

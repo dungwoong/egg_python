@@ -1,0 +1,2 @@
+- We want conditional rewrites so we want conditions on certain bindings in our rewrites that can get checked for. So when we compare or try to bind something we can just check a conditional for that thing.
+- Dynamic rewrites, we can just do multiple conditionals for an if-else statement kinda thing. Anything else, we can add it ad-hoc later.
