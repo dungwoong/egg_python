@@ -290,11 +290,6 @@ class EGraph:
                 self.node2id[new_node] = self.find(eclass_id)
                 eclass.nodes.remove(node)
                 eclass.nodes.add(new_node)
-        for eid in self.ids_to_remove:
-            if eid in self.id2eclass:
-                self.id2eclass.pop(eid)
-            for a in self.analyses:
-                a.remove(eid)
         if self.debug:
             # map should only contain ids of representatives(I added this)
             assert all(k in self.node2id.values() for k in self.id2eclass)
@@ -320,12 +315,21 @@ class EGraph:
             if data_changed:
                 self.analysis_pending.extend(self.id2eclass[eclass_id].parents)
     
+    def remove_ids(self):
+        for eid in self.ids_to_remove:
+            if eid in self.id2eclass:
+                self.id2eclass.pop(eid)
+            for a in self.analyses:
+                a.remove(eid)
+
     def rebuild(self):
         # this works because process unions will repair the graph completely,
         # and then repair classes might mess up the graph again but at least it operates on a fixed graph
         while len(self.pending) or len(self.analysis_pending):
             self.process_unions()
             self.repair_classes()
+        self.remove_ids()
+            
 
 
 
