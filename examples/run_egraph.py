@@ -36,7 +36,7 @@ def a_time_divide_example():
 
     eclasses, x_enodes = export_egraph(egraph)
     # print([ec.full_repr() for ec in eclasses.values()])
-    min_expr = extract_egraph_local_cost(eclasses.values(), eclasses[output_eclass_id], costs={'<<': 0.5})
+    min_expr = extract_egraph_op_cost(eclasses.values(), eclasses[output_eclass_id], costs={'<<': 0.5})
     print(f'Best expr: {min_expr}')
 
 def hashable_dict_example():

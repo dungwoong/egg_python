@@ -1,4 +1,4 @@
-from egraph.egraph import BasicAnalysis, EGraph, EClass, Node, export_egraph, extract_egraph_local_cost
+from egraph.egraph import BasicAnalysis, EGraph, EClass, Node, export_egraph, extract_egraph_op_cost
 from egraph.rewrite import Rewrite, ASTNode
 
 def test_node_hash():
@@ -58,7 +58,7 @@ def test_basic():
 
     eclasses, _ = export_egraph(egraph)
     # TODO in the future, probably don't wanna have to hardcode div_id in here
-    min_expr = extract_egraph_local_cost(eclasses.values(), eclasses[div_id], costs={'<<': 0.5})
+    min_expr = extract_egraph_op_cost(eclasses.values(), eclasses[div_id], costs={'<<': 0.5})
     assert str(min_expr) == 'x', min_expr
 
 def test_constant_analysis():

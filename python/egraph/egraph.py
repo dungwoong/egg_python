@@ -349,6 +349,13 @@ class ExENode:
         assert all(isinstance(c, ExEClass) for c in self.children)
         return f'xNode({self.op}, {tuple(c.id for c in self.children)})' if self.children else f'xNode({self.op})'
 
+    def full_repr(self, ignore_metadata=None):
+        if ignore_metadata is None:
+            ignore_metadata = set()
+        args = ' '.join([str(c.id) for c in self.children]) if self.children else ''
+        metadata = {k: self.metadata[k] for k in self.metadata if k not in ignore_metadata}
+        return f'({self.op} {args} {metadata})' if self.children else str(self.op)
+
 class ExtractedEnode:
     """
     After extraction process
@@ -397,8 +404,8 @@ class ExEClass:
     def __repr__(self):
         return f'xClass({self.id})'
     
-    def full_repr(self):
-        return f'xClass(id={self.id}, nodes={[repr(n) for n in self.nodes]})'
+    def full_repr(self, ignore_metadata=None):
+        return f'xClass(id={self.id}, nodes={[n.full_repr(ignore_metadata) for n in self.nodes]})'
 
 def export_egraph(egraph: EGraph):
     eclasses = dict() # id to eclass
@@ -418,10 +425,24 @@ def export_egraph(egraph: EGraph):
         n.children = tuple(eclasses[egraph.unionfind[c]] for c in n.children)
     return eclasses, x_enodes
 
-def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs, default_cost=1):
+def extract_egraph_op_cost(eclasses: List[ExEClass], class_to_extract, costs, default_cost=1):
+    """
+    Extract from the egraph when
+    - cost is local(cost of node = cost(self) + cost(children))
+    - cost(self) can be deduced from the op
+
+    costs: dict of op(str) : cost(float)
+    default_cost: default cost of anything not in costs
+    """
+
+    def get_cost(node: ExENode):
+        return costs.get(node.op, default_cost)
+    return extract_egraph_local_cost(eclasses, class_to_extract, get_cost)
+
+def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, get_cost):
     # once we support pattern matching, we don't need to add class_to_extract now
     for eclass in eclasses:
-        eclass.metadata['cost'] = 1e9
+        eclass.metadata['cost'] = float('inf')
         eclass.metadata['argmin'] = None
     
     def get_children_cost(enode: ExENode):
@@ -435,7 +456,7 @@ def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs,
         keep_going = False
         for eclass in eclasses:
             for enode in eclass.nodes:
-                new_cost = get_children_cost(enode) + costs.get(enode.op, default_cost)
+                new_cost = get_children_cost(enode) + get_cost(enode)
                 if new_cost != enode.metadata.get('cost', None):
                     keep_going = True
                     enode.metadata['cost'] = new_cost
@@ -443,6 +464,10 @@ def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs,
                     eclass.metadata['cost'] = enode.metadata['cost']
                     eclass.metadata['argmin'] = enode
     # Extract
+    if class_to_extract is None:
+        # we can ONLY populate the costs, without actually extracting
+        return
+    
     def extract(eclass: ExEClass):
         min_enode = eclass.metadata['argmin']
         extracted = ExtractedEnode.from_enode(min_enode)
@@ -450,6 +475,15 @@ def extract_egraph_local_cost(eclasses: List[ExEClass], class_to_extract, costs,
             extracted.children.append(extract(c))
         return extracted
     return extract(class_to_extract)
+
+def remove_nodes_above_min_cost(eclasses: List[ExEClass]):
+    for cls in eclasses:
+        min_cost = cls.metadata['cost']
+        to_keep = []
+        for n in cls.nodes:
+            if n.metadata['cost'] == min_cost:
+                to_keep.append(n)
+        cls.nodes = to_keep
 
 
 
